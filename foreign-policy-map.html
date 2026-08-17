@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Map the Field — 2028 Foreign Policy Grid</title>
+<meta name="description" content="Plot 2028 presidential candidates on a realist/idealist, isolationist/interventionist grid, then share your map.">
+<style>
+  :root{
+    --paper: #F4F1E8;
+    --paper-edge: #e9e4d4;
+    --ink: #1E1E1E;
+    --ink-soft: #55524a;
+    --quad-tl: #E8E3D3;
+    --quad-tr: #EADFC8;
+    --quad-bl: #E3E6D8;
+    --quad-br: #EAD9CC;
+    --axis: #7A1E1E;
+    --rep: #C0392B;
+    --dem: #2E5FA3;
+    --oth: #6B4E9C;
+    --line: #cfc9b4;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background: var(--paper);
+    background-image:
+      radial-gradient(ellipse at top left, rgba(0,0,0,0.03), transparent 60%),
+      radial-gradient(ellipse at bottom right, rgba(0,0,0,0.03), transparent 60%);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    min-height:100vh;
+  }
+  .wrap{max-width:1280px;margin:0 auto;padding:28px 20px 60px}
+
+  header{margin-bottom:22px}
+  .eyebrow{
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size:11.5px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--ink-soft); margin:0 0 8px;
+  }
+  h1{
+    font-family: Georgia, "Times New Roman", serif;
+    font-weight:700; font-size:clamp(28px,4vw,42px); margin:0 0 8px; line-height:1.05;
+  }
+  .sub{color:var(--ink-soft); font-size:15px; max-width:640px; line-height:1.5; margin:0}
+
+  .toolbar{
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+    margin:20px 0 18px; padding:12px 14px;
+    background:rgba(255,255,255,0.4); border:1px solid var(--line); border-radius:8px;
+  }
+  button, .btn{
+    font: inherit; font-size:13.5px; font-weight:600;
+    padding:9px 14px; border-radius:6px; border:1px solid var(--ink);
+    background:var(--ink); color:var(--paper); cursor:pointer;
+    transition: transform .08s ease, opacity .15s ease;
+  }
+  button:active{transform:translateY(1px)}
+  button.ghost{background:transparent; color:var(--ink); border:1px solid #9c9787}
+  button.ghost:hover{background:rgba(0,0,0,0.05)}
+  button:focus-visible, input:focus-visible, .chip:focus-visible{
+    outline:3px solid var(--axis); outline-offset:2px;
+  }
+  .toolbar .spacer{flex:1}
+  .status{font-size:12.5px; color:var(--ink-soft); font-family: ui-monospace, Menlo, Consolas, monospace;}
+
+  .layout{display:grid; grid-template-columns: 1fr 300px; gap:22px; align-items:start}
+  @media (max-width: 880px){ .layout{grid-template-columns: 1fr} }
+
+  /* ---- Plot ---- */
+  .plot-shell{
+    background:#fff; border:1px solid var(--line); border-radius:10px;
+    padding:18px 18px 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .plot-title-row{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; gap:10px; flex-wrap:wrap}
+  .plot-title-row h2{font-family:Georgia,serif; font-size:16px; margin:0; font-weight:700}
+  .legend{display:flex; gap:14px; font-size:12.5px; color:var(--ink-soft); align-items:center; flex-wrap:wrap}
+  .legend span{display:inline-flex; align-items:center; gap:5px}
+  .swatch{width:10px;height:10px;border-radius:50%; display:inline-block}
+
+  .plot{
+    position:relative; width:100%; aspect-ratio: 16 / 12.5;
+    background: var(--paper); border:1.5px solid var(--ink); border-radius:2px;
+    overflow:hidden; touch-action:none; cursor:crosshair;
+  }
+  .quad{position:absolute; width:50%; height:50%;}
+  .quad.tl{top:0;left:0;background:var(--quad-tl)}
+  .quad.tr{top:0;left:50%;background:var(--quad-tr)}
+  .quad.bl{top:50%;left:0;background:var(--quad-bl)}
+  .quad.br{top:50%;left:50%;background:var(--quad-br)}
+
+  .axis-line{position:absolute; background:var(--axis); z-index:2}
+  .axis-line.h{left:0; right:0; top:50%; height:2px}
+  .axis-line.v{top:0; bottom:0; left:50%; width:2px}
+  .wobble{filter:url(#inkwobble)}
+
+  .axis-label{
+    position:absolute; font-family:Georgia,serif; font-style:italic; font-weight:700;
+    color:var(--axis); font-size:13px; letter-spacing:.03em; z-index:3; white-space:nowrap;
+    text-transform:uppercase;
+  }
+  .axis-label.top{top:6px; left:50%; transform:translateX(-50%)}
+  .axis-label.bottom{bottom:6px; left:50%; transform:translateX(-50%)}
+  .axis-label.left{left:8px; top:50%; transform:translateY(6px)}
+  .axis-label.right{right:8px; top:50%; transform:translateY(6px); text-align:right}
+
+  .dot{
+    position:absolute; width:14px; height:14px; margin:-7px 0 0 -7px;
+    border-radius:50%; border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,0.35);
+    z-index:5; cursor:grab; touch-action:none;
+  }
+  .dot:active{cursor:grabbing}
+  .dot.rep{background:var(--rep)}
+  .dot.dem{background:var(--dem)}
+  .dot.oth{background:var(--oth)}
+  .dot-label{
+    position:absolute; font-size:12px; font-weight:600; color:var(--ink);
+    background:rgba(244,241,232,0.82); padding:1px 4px; border-radius:3px;
+    white-space:nowrap; z-index:6; pointer-events:none;
+  }
+
+  .ref-dot{
+    position:absolute; width:12px; height:12px; margin:-6px 0 0 -6px;
+    border-radius:50%; background:transparent; z-index:4;
+    border:2px dashed rgba(30,30,30,0.55);
+  }
+  .ref-label{
+    position:absolute; font-size:10.5px; font-style:italic; color:rgba(30,30,30,0.6);
+    white-space:nowrap; z-index:4; pointer-events:none;
+  }
+
+  .hint{font-size:12px; color:var(--ink-soft); margin-top:10px; line-height:1.5}
+
+  /* ---- Sidebar ---- */
+  .panel{
+    background:#fff; border:1px solid var(--line); border-radius:10px;
+    padding:16px; margin-bottom:16px;
+  }
+  .panel h3{
+    font-family:Georgia,serif; font-size:14px; margin:0 0 10px; font-weight:700;
+    display:flex; align-items:center; gap:7px;
+  }
+  .party-dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+  .chips{display:flex; flex-wrap:wrap; gap:6px}
+  .chip{
+    font-size:12.5px; padding:6px 10px; border-radius:20px; cursor:pointer;
+    border:1px solid var(--line); background:var(--paper); color:var(--ink);
+    display:inline-flex; align-items:center; gap:6px; user-select:none;
+  }
+  .chip:hover{border-color:var(--ink)}
+  .chip .dotmini{width:7px;height:7px;border-radius:50%}
+
+  .board-list{list-style:none; margin:0; padding:0; max-height:220px; overflow:auto}
+  .board-list li{
+    display:flex; align-items:center; justify-content:space-between;
+    font-size:12.5px; padding:5px 2px; border-bottom:1px solid var(--paper-edge);
+  }
+  .board-list li span.name{display:flex; align-items:center; gap:6px}
+  .board-list button.rm{
+    background:none; border:none; color:var(--ink-soft); font-size:15px;
+    padding:0 4px; cursor:pointer;
+  }
+  .board-list button.rm:hover{color:var(--rep)}
+  .empty{color:var(--ink-soft); font-size:12.5px; font-style:italic}
+
+  .add-form{display:flex; flex-direction:column; gap:8px}
+  .add-form input[type=text]{
+    font:inherit; font-size:13px; padding:8px 10px; border:1px solid var(--line);
+    border-radius:6px; background:var(--paper);
+  }
+  .party-pick{display:flex; gap:12px; font-size:12.5px; align-items:center}
+  .party-pick label{display:flex; gap:5px; align-items:center; cursor:pointer}
+
+  footer{margin-top:30px; font-size:12px; color:var(--ink-soft); line-height:1.6}
+  footer a{color:var(--ink-soft)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <filter id="inkwobble">
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" result="noise" seed="7"/>
+    <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.6"/>
+  </filter>
+</svg>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Two spectrums, your read</p>
+    <h1>Map the 2028 Field</h1>
+    <p class="sub">Realist ↔ idealist on one axis, isolationist ↔ interventionist on the other. Tap a name to drop it on the board, then drag it where you think it belongs. Add anyone the list is missing.</p>
+  </header>
+
+  <div class="toolbar">
+    <button class="ghost" id="btnCompare">Show Eli's map</button>
+    <button class="ghost" id="btnClear">Clear board</button>
+    <div class="spacer"></div>
+    <span class="status" id="statusMsg"></span>
+    <button id="btnShare">Copy share link</button>
+  </div>
+
+  <div class="layout">
+    <div class="plot-shell">
+      <div class="plot-title-row">
+        <h2>Foreign Policy Placement</h2>
+        <div class="legend">
+          <span><span class="swatch" style="background:var(--rep)"></span>Republican</span>
+          <span><span class="swatch" style="background:var(--dem)"></span>Democrat</span>
+          <span><span class="swatch" style="background:var(--oth)"></span>Other</span>
+        </div>
+      </div>
+
+      <div class="plot" id="plot">
+        <div class="quad tl"></div>
+        <div class="quad tr"></div>
+        <div class="quad bl"></div>
+        <div class="quad br"></div>
+        <div class="axis-line h wobble"></div>
+        <div class="axis-line v wobble"></div>
+        <div class="axis-label top">Realist</div>
+        <div class="axis-label bottom">Idealist</div>
+        <div class="axis-label left">Isolationist</div>
+        <div class="axis-label right">Interventionist / hawkish</div>
+        <!-- dots injected here -->
+      </div>
+      <p class="hint">Tap a name in the list to place it at the center, then drag. Drag a placed dot to fine-tune. Your board saves automatically in this browser.</p>
+    </div>
+
+    <div class="sidebar">
+      <div class="panel">
+        <h3><span class="party-dot" style="background:var(--rep)"></span> Republican field</h3>
+        <div class="chips" id="chipsRep"></div>
+      </div>
+      <div class="panel">
+        <h3><span class="party-dot" style="background:var(--dem)"></span> Democratic field</h3>
+        <div class="chips" id="chipsDem"></div>
+      </div>
+      <div class="panel">
+        <h3>Add someone else</h3>
+        <div class="add-form">
+          <input type="text" id="customName" placeholder="Name">
+          <div class="party-pick">
+            <label><input type="radio" name="customParty" value="rep" checked> Republican</label>
+            <label><input type="radio" name="customParty" value="dem"> Democrat</label>
+            <label><input type="radio" name="customParty" value="oth"> Other</label>
+          </div>
+          <button id="btnAddCustom" class="ghost">Add to board</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>On your board</h3>
+        <ul class="board-list" id="boardList"></ul>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Axes are a simplifying model, not a formal measurement — placements reflect the mapmaker's own read of each figure's public record.
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- Roster ----------
+  var ROSTER_REP = [
+    "J.D. Vance","Marco Rubio","Ron DeSantis","Ted Cruz","Nikki Haley",
+    "Vivek Ramaswamy","Tucker Carlson","Glenn Youngkin","Brian Kemp",
+    "Josh Hawley","Tom Cotton","Kristi Noem","Thomas Massie","Candace Owens",
+    "Donald J. Trump Jr.","Ivanka Trump"
+  ];
+  var ROSTER_DEM = [
+    "Gavin Newsom","Kamala Harris","Pete Buttigieg","Josh Shapiro",
+    "Gretchen Whitmer","J.B. Pritzker","Andy Beshear","Wes Moore",
+    "Alexandria Ocasio-Cortez","Ro Khanna","Jon Ossoff","Mark Kelly",
+    "Rahm Emanuel","Chris Murphy","Raphael Warnock","Ruben Gallego"
+  ];
+
+  // Reference map: Eli's finished placements (data coords, -10.5 to 10.5 both axes)
+  var ELI_MAP = [
+    ["Trump","rep",3.00,8.60],["Marco Rubio","rep",5.80,6.30],["Ted Cruz","rep",7.60,4.20],
+    ["Mark Kelly","dem",4.50,3.00],["Rahm Emanuel","dem",5.20,-1.48],["J.D. Vance","rep",-2.50,7.50],
+    ["Tucker Carlson","rep",-6.50,5.00],["Ron DeSantis","rep",0.43,4.55],["Thomas Massie","rep",-8.00,-2.00],
+    ["Ro Khanna","dem",-3.50,-2.50],["Alexandria Ocasio-Cortez","dem",-3.00,-5.00],
+    ["Pete Buttigieg","dem",1.04,-2.45],["Josh Shapiro","dem",2.92,0.88],["Kamala Harris","dem",2.09,-4.99],
+    ["Jon Ossoff","dem",3.96,-3.64],["Nick Fuentes","rep",-7.46,9.45],["Hasan Piker","dem",-10.08,6.48],
+    ["Gavin Newsom","dem",1.18,2.07],["Obama","dem",-0.99,-1.39],["Biden","dem",5.85,-4.87]
+  ];
+
+  var DATA_MIN=-10.5, DATA_MAX=10.5, DATA_RANGE=21;
+  function dataToFrac(dx,dy){
+    return { fx: (dx-DATA_MIN)/DATA_RANGE, fy: (DATA_MAX-dy)/DATA_RANGE };
+  }
+
+  // ---------- State ----------
+  // board: array of {id,name,party,fx,fy}  fx,fy in [0,1]
+  var board = [];
+  var placedNames = {}; // name -> true
+  var uid = 1;
+  var showRef = false;
+
+  var plot = document.getElementById('plot');
+  var boardListEl = document.getElementById('boardList');
+  var statusMsg = document.getElementById('statusMsg');
+
+  function partyClass(p){ return p==='rep' ? 'rep' : (p==='dem' ? 'dem' : 'oth'); }
+
+  function save(){
+    try{ localStorage.setItem('fp_board_v1', JSON.stringify(board)); }catch(e){}
+  }
+
+  function loadFromStorage(){
+    try{
+      var raw = localStorage.getItem('fp_board_v1');
+      if(raw){ var arr = JSON.parse(raw); if(Array.isArray(arr)) return arr; }
+    }catch(e){}
+    return null;
+  }
+
+  function loadFromHash(){
+    var h = location.hash;
+    if(h && h.indexOf('#map=')===0){
+      try{
+        var json = decodeURIComponent(escape(atob(h.slice(5))));
+        var arr = JSON.parse(json);
+        if(Array.isArray(arr)) return arr;
+      }catch(e){ console.warn('bad share link', e); }
+    }
+    return null;
+  }
+
+  function render(){
+    // clear existing dot nodes
+    plot.querySelectorAll('.dot,.dot-label,.ref-dot,.ref-label').forEach(function(n){ n.remove(); });
+
+    board.forEach(function(item){
+      var dot = document.createElement('div');
+      dot.className = 'dot ' + partyClass(item.party);
+      dot.style.left = (item.fx*100)+'%';
+      dot.style.top = (item.fy*100)+'%';
+      dot.dataset.id = item.id;
+      dot.setAttribute('tabindex','0');
+      dot.setAttribute('aria-label', item.name);
+      plot.appendChild(dot);
+
+      var label = document.createElement('div');
+      label.className = 'dot-label';
+      label.textContent = item.name;
+      label.style.left = 'calc(' + (item.fx*100) + '% + 10px)';
+      label.style.top = 'calc(' + (item.fy*100) + '% - 9px)';
+      plot.appendChild(label);
+
+      attachDrag(dot, item, label);
+    });
+
+    if(showRef){
+      ELI_MAP.forEach(function(row){
+        var f = dataToFrac(row[2], row[3]);
+        var rd = document.createElement('div');
+        rd.className = 'ref-dot';
+        rd.style.borderColor = row[1]==='rep' ? 'rgba(192,57,43,0.7)' : 'rgba(46,95,163,0.7)';
+        rd.style.left = (f.fx*100)+'%';
+        rd.style.top = (f.fy*100)+'%';
+        plot.appendChild(rd);
+
+        var rl = document.createElement('div');
+        rl.className = 'ref-label';
+        rl.textContent = row[0];
+        rl.style.left = 'calc(' + (f.fx*100) + '% + 9px)';
+        rl.style.top = 'calc(' + (f.fy*100) + '% + 4px)';
+        plot.appendChild(rl);
+      });
+    }
+
+    renderChips();
+    renderBoardList();
+    save();
+  }
+
+  function renderBoardList(){
+    boardListEl.innerHTML = '';
+    if(board.length===0){
+      var li = document.createElement('li');
+      li.innerHTML = '<span class="empty">Nothing placed yet — tap a name below.</span>';
+      boardListEl.appendChild(li);
+      return;
+    }
+    board.forEach(function(item){
+      var li = document.createElement('li');
+      var span = document.createElement('span');
+      span.className = 'name';
+      var dotMini = document.createElement('span');
+      dotMini.className = 'dotmini';
+      dotMini.style.width='8px'; dotMini.style.height='8px'; dotMini.style.borderRadius='50%';
+      dotMini.style.display='inline-block';
+      dotMini.style.background = item.party==='rep' ? 'var(--rep)' : (item.party==='dem' ? 'var(--dem)' : 'var(--oth)');
+      span.appendChild(dotMini);
+      span.appendChild(document.createTextNode(item.name));
+      li.appendChild(span);
+      var rm = document.createElement('button');
+      rm.className = 'rm'; rm.title = 'Remove'; rm.textContent = '✕';
+      rm.addEventListener('click', function(){ removeFromBoard(item.id); });
+      li.appendChild(rm);
+      boardListEl.appendChild(li);
+    });
+  }
+
+  function renderChips(){
+    renderChipGroup('chipsRep', ROSTER_REP, 'rep');
+    renderChipGroup('chipsDem', ROSTER_DEM, 'dem');
+  }
+  function renderChipGroup(elId, list, party){
+    var el = document.getElementById(elId);
+    el.innerHTML = '';
+    list.forEach(function(name){
+      if(placedNames[name]) return; // already on board
+      var chip = document.createElement('div');
+      chip.className = 'chip';
+      chip.setAttribute('tabindex','0');
+      chip.setAttribute('role','button');
+      var d = document.createElement('span');
+      d.className = 'dotmini';
+      d.style.background = party==='rep' ? 'var(--rep)' : 'var(--dem)';
+      chip.appendChild(d);
+      chip.appendChild(document.createTextNode(name));
+      chip.addEventListener('click', function(){ addToBoard(name, party); });
+      chip.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); addToBoard(name, party); } });
+      el.appendChild(chip);
+    });
+  }
+
+  function addToBoard(name, party, fx, fy){
+    if(placedNames[name]) return;
+    var item = { id: 'p'+(uid++), name: name, party: party, fx: (fx!=null?fx:0.5), fy: (fy!=null?fy:0.5) };
+    board.push(item);
+    placedNames[name] = true;
+    render();
+    setStatus(name + ' added — drag to position');
+  }
+
+  function removeFromBoard(id){
+    var idx = board.findIndex(function(b){ return b.id===id; });
+    if(idx>-1){
+      placedNames[board[idx].name] = false;
+      board.splice(idx,1);
+      render();
+    }
+  }
+
+  function setStatus(msg){
+    statusMsg.textContent = msg;
+    clearTimeout(setStatus._t);
+    setStatus._t = setTimeout(function(){ statusMsg.textContent=''; }, 2400);
+  }
+
+  // ---------- Dragging ----------
+  function attachDrag(dot, item, label){
+    var dragging = false;
+
+    function pointerToFrac(clientX, clientY){
+      var rect = plot.getBoundingClientRect();
+      var fx = (clientX - rect.left) / rect.width;
+      var fy = (clientY - rect.top) / rect.height;
+      fx = Math.min(1, Math.max(0, fx));
+      fy = Math.min(1, Math.max(0, fy));
+      return {fx:fx, fy:fy};
+    }
+
+    function move(e){
+      if(!dragging) return;
+      var p = (e.touches && e.touches[0]) ? e.touches[0] : e;
+      var f = pointerToFrac(p.clientX, p.clientY);
+      item.fx = f.fx; item.fy = f.fy;
+      dot.style.left = (f.fx*100)+'%';
+      dot.style.top = (f.fy*100)+'%';
+      label.style.left = 'calc(' + (f.fx*100) + '% + 10px)';
+      label.style.top = 'calc(' + (f.fy*100) + '% - 9px)';
+      e.preventDefault();
+    }
+    function up(){
+      if(!dragging) return;
+      dragging = false;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      save();
+    }
+    dot.addEventListener('pointerdown', function(e){
+      dragging = true;
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      e.preventDefault();
+    });
+
+    // keyboard nudge
+    dot.addEventListener('keydown', function(e){
+      var step = 0.01;
+      var moved = true;
+      if(e.key==='ArrowLeft') item.fx = Math.max(0,item.fx-step);
+      else if(e.key==='ArrowRight') item.fx = Math.min(1,item.fx+step);
+      else if(e.key==='ArrowUp') item.fy = Math.max(0,item.fy-step);
+      else if(e.key==='ArrowDown') item.fy = Math.min(1,item.fy+step);
+      else if(e.key==='Delete' || e.key==='Backspace'){ removeFromBoard(item.id); return; }
+      else moved = false;
+      if(moved){
+        e.preventDefault();
+        dot.style.left = (item.fx*100)+'%';
+        dot.style.top = (item.fy*100)+'%';
+        label.style.left = 'calc(' + (item.fx*100) + '% + 10px)';
+        label.style.top = 'calc(' + (item.fy*100) + '% - 9px)';
+        save();
+      }
+    });
+  }
+
+  // ---------- Toolbar ----------
+  document.getElementById('btnClear').addEventListener('click', function(){
+    if(board.length===0) return;
+    if(!confirm('Clear everyone off the board?')) return;
+    board = []; placedNames = {}; render();
+  });
+
+  document.getElementById('btnCompare').addEventListener('click', function(e){
+    showRef = !showRef;
+    e.target.textContent = showRef ? "Hide Eli's map" : "Show Eli's map";
+    render();
+  });
+
+  document.getElementById('btnShare').addEventListener('click', function(){
+    var json = JSON.stringify(board);
+    var b64 = btoa(unescape(encodeURIComponent(json)));
+    var url = location.origin + location.pathname + '#map=' + b64;
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(url).then(function(){
+        setStatus('Link copied to clipboard');
+      }, function(){
+        prompt('Copy this link:', url);
+      });
+    } else {
+      prompt('Copy this link:', url);
+    }
+    history.replaceState(null,'',url);
+  });
+
+  document.getElementById('btnAddCustom').addEventListener('click', function(){
+    var input = document.getElementById('customName');
+    var name = input.value.trim();
+    if(!name) return;
+    var party = document.querySelector('input[name=customParty]:checked').value;
+    if(placedNames[name]){ setStatus(name + ' is already on the board'); return; }
+    addToBoard(name, party);
+    input.value = '';
+  });
+  document.getElementById('customName').addEventListener('keydown', function(e){
+    if(e.key==='Enter'){ document.getElementById('btnAddCustom').click(); }
+  });
+
+  // ---------- Init ----------
+  var fromHash = loadFromHash();
+  var fromStorage = fromHash ? null : loadFromStorage();
+  var initial = fromHash || fromStorage;
+
+  if(initial){
+    initial.forEach(function(item){
+      if(!item || !item.name) return;
+      placedNames[item.name] = true;
+      board.push({
+        id: 'p'+(uid++), name: item.name,
+        party: item.party||'oth',
+        fx: typeof item.fx==='number' ? item.fx : 0.5,
+        fy: typeof item.fy==='number' ? item.fy : 0.5
+      });
+    });
+  }
+  render();
+})();
+</script>
+</body>
+</html>
